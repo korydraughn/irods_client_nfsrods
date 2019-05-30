@@ -62,8 +62,8 @@ You'll need to set each option to match your iRODS environment. Each option is e
         // The refresh time (in minutes) for cached user information.
         "user_information_refresh_time_in_minutes": 60,
 
-        // The refresh time (in seconds) for cached stat information.
-        "file_information_refresh_time_in_seconds": 2
+        // The refresh time (in milliseconds) for cached stat information.
+        "file_information_refresh_time_in_milliseconds": 1000
     },
 
     // This section defines the location of the iRODS server being presented
