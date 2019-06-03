@@ -1,0 +1,36 @@
+Should "chmod" be supported?
+============================
+
+chmod 0X00 ...
+  where "X" is the only properties a user can adjust.
+  
+The table below is what I'm thinking chmod will assign as
+the permissions in iRODS for each Linux permission config.
+
+Collections will automatically have the execute bit set.
+Data objects will never have the execute bit set.
+
+Q. What should 0001 map to?
+Q. Does setting the execute bit make sense in NFSRODS and iRODS?
+Q. Should the execute bit be ignored?
+Q. Does anything look like it could lead to issues?
+
+rwx v iRODS
+--- - --------------
+000 0 null
+001 1 ?
+010 2 write
+011 3 write
+100 4 read
+101 5 read
+110 6 own or write?
+111 7 own or write?
+
+When stat is called on a collection or data object, the iRODS
+permissions are mapped like so:
+
+iRODS rwx
+----- ---
+own   110
+write 110
+read  100
