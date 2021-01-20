@@ -853,8 +853,7 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
 
             String irodsAbsPath = parentPath.normalize().toString();
 
-            List<CollectionAndDataObjectListingEntry> entries;
-            entries = lao.listDataObjectsAndCollectionsUnderPath(irodsAbsPath);
+            List<CollectionAndDataObjectListingEntry> entries = lao.listAllDataObjectsAndCollectionsUnderPath(irodsAbsPath);
 
             for (CollectionAndDataObjectListingEntry e : entries)
             {
