@@ -54,6 +54,12 @@
 			<url>https://download.dcache.org/nexus/content/repositories/releases</url>
 			<layout>default</layout>
 		</repository>
+		<repository>
+			<id>oracleReleases</id>
+			<name>Oracle Released Java Packages</name>
+                        <url>https://download.oracle.com/maven</url>
+			<layout>default</layout>
+		</repository>
 	</repositories>
 	<developers>
 		<developer>
@@ -72,7 +78,7 @@
 			<dependency>
 				<groupId>org.dcache</groupId>
 				<artifactId>nfs4j-core</artifactId>
-				<version>0.18.2</version>
+				<version>0.19.0</version>
 			</dependency>
 			<dependency>
 				<groupId>org.irods.jargon</groupId>
