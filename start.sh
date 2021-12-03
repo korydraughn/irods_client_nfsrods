@@ -15,7 +15,7 @@ if [ "$1" != "sha" ]; then
     fi
 
     # Start services.
-    service rpcbind start
+    mkdir -p /run/sendsigs.omit.d && service rpcbind start
 fi
 
 exec java \
