@@ -6,8 +6,8 @@ RUN apt-get update && \
 RUN git clone git://git.linux-nfs.org/projects/mora/nfstest.git
 WORKDIR /nfstest/test
 
-ADD run_test.sh .
-RUN chmod u+x ./run_test.sh
+ADD start.sh .
+RUN chmod u+x ./start.sh
 
-ENTRYPOINT ["./run_test.sh"]
-CMD ["-h", "localhost"]
+ENTRYPOINT ["./start.sh"]
+CMD ["--help"]

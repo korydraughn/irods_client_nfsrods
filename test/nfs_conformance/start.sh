@@ -1,43 +1,9 @@
 #! /bin/bash
 
-host=
-port=2049
-
-usage() {
-cat <<_EOF_
-Usage: docker run -it --privileged nfsrods_tester [OPTIONS]...
-
-Available options:
-    -h     The hostname of the computer running NFSRODS.
-    -p     The port number of the NFSRODS server. [Default=2049]
-    --help This message
-
-Example:
-    docker run -it --rm --name nfsrods_tester --privileged nfsrods_tester -h localhost -p 2049
-_EOF_
-    exit
-}
-
-while [ -n "$1" ]; do
-    case "$1" in
-        -h) shift; host=${1};;
-        -p) shift; port=${1};;
-        --help) usage;;
-    esac
-    shift
-done
-
-if [ -z "$host" ]; then
-    echo Hostname not set.
-    exit 1
-fi
-
-if [ -z "$port" ]; then
-    echo Port number not set.
-    exit 1
-fi
-
 export PYTHONPATH=/nfstest
+
+host=${1:-localhost}
+port=${2:-2049}
 
 ./nfstest_posix -s $host -p $port --runtest 'access'
 ./nfstest_posix -s $host -p $port --runtest 'chdir'
