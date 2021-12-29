@@ -1,13 +1,17 @@
 FROM ubuntu:18.04
 
 RUN apt-get update && \
-    apt-get install -y git python nfs-common tcpdump
+    apt-get install -y git python nfs-common tcpdump sudo
 
 RUN git clone git://git.linux-nfs.org/projects/mora/nfstest.git
 WORKDIR /nfstest/test
 
-ADD start.sh .
-RUN chmod u+x ./start.sh
+RUN echo '%sudo ALL=(ALL:ALL) NOPASSWD:ALL' >> /etc/sudoers && \
+    adduser --disabled-password --no-create-home --gecos "" nfstest_user && \
+    adduser nfstest_user sudo && \
+    mkdir -p /mnt/t && chmod 777 /mnt/t
 
-ENTRYPOINT ["./start.sh"]
+ADD start.sh /
+
+ENTRYPOINT ["bash", "/start.sh"]
 CMD ["--help"]
