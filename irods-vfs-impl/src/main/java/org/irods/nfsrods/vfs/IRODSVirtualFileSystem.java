@@ -1360,7 +1360,7 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
             // the write operation from multiple threads. This will result in
             // an error if old stat information is used across multiple writes.
             // We remove any cached stat object for the path to avoid this.
-            statObjectCache_.remove(acct.getUserName() + "_" + path);
+            statObjectCache_.remove(acct.getUserName() + "_" + path.toString());
 
             IRODSFileFactory ff = factory_.getIRODSFileFactory(acct);
 
