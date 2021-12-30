@@ -1293,6 +1293,10 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
 
             inodeToPathMapper_.unmap(getInodeNumber(objectPath), objectPath);
 
+            // Remove any cached stat information as this can lead to unwanted errors
+            // when carrying out later requests.
+            statObjectCache_.remove(acct.getUserName() + "_" + objectPath.toString());
+
             log_.debug("remove - [{}] removed.", objectPath);
         }
         catch (JargonException e)
