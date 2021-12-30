@@ -1,6 +1,6 @@
 #! /bin/bash
 
-export PYTHONPATH=/nfstest
+#export PYTHONPATH=/nfstest
 set -x
 
 #username="$1"
@@ -11,8 +11,9 @@ set -x
 #adduser $username sudo
 
 # Run the tests!
-cmd="id && cd /nfstest/test && ./nfstest_posix $@"
-su -p nfstest_user -c "$cmd"
+#cmd="cd /nfstest/test && ./nfstest_posix $@"
+#su -p nfstest_user -c "$cmd"
+sudo -u nfstest_user PYTHONPATH=/nfstest /nfstest/test/nfstest_posix "$@"
 #su -p $username -c "
 #su -p nfstest_user -c "
 #cd /nfstest/test
