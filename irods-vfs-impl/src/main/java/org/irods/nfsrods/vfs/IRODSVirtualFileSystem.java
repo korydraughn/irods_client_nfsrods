@@ -908,6 +908,7 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
             // since we last saw it.
             if (objStat.getModifiedAt().equals(cachedResult.collectionLastModified))
             {
+            	log_.debug("mtime has not changed for [{}]. Returning cached result.", _path);
                 return cachedResult.entries;
             }
             
@@ -918,6 +919,8 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
             cachedResult = new CachedListingGenQueryResult();
             cachedResult.entries = new ArrayList<>();
         }
+
+        log_.debug("Listing contents of [{}] ...", _path);
 
         cachedResult.collectionLastModified = objStat.getModifiedAt();
 
@@ -966,10 +969,10 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
             Path parentPath = getPath(toInodeNumber(_inode));
             log_.debug("list - Listing contents of [{}] ...", parentPath);
 
-            String irodsAbsPath = parentPath.toString();
+            String parentPathString = parentPath.toString();
 
             List<CollectionAndDataObjectListingEntry>
-                entries = listDataObjectsAndCollectionsUnderPathWithPermissions(acct, irodsAbsPath);
+                entries = listDataObjectsAndCollectionsUnderPathWithPermissions(acct, parentPathString);
             log_.debug("list - found {} entries.", entries.size());
             
             // 0, 1, and 2 are reserved cookie values.
@@ -1104,6 +1107,8 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
             file.mkdir();
             file.close();
 
+            listOpCache_.remove(acct.getUserName() + "#" + parentPath.toString());
+
             long inodeNumber = inodeToPathMapper_.getAndIncrementFileID();
             inodeToPathMapper_.map(inodeNumber, file.getAbsolutePath());
 
@@ -1189,6 +1194,17 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
 
             inodeToPathMapper_.remap(getInodeNumber(srcPath), srcPath, dstPath);
 
+            // TODO This shouldn't be necessary if the mtime updates are working.
+            listOpCache_.remove(acct.getUserName() + "#" + srcParentPath.toString());
+
+            if (!srcParentPath.equals(dstParentPath))
+            {
+            	listOpCache_.remove(acct.getUserName() + "#" + dstParentPath.toString());
+            }
+
+            statObjectCache_.remove(acct.getUserName() + "_" + srcParentPath.toString());
+            statObjectCache_.remove(acct.getUserName() + "_" + dstParentPath.toString());
+
             return true;
         }
         catch (JargonException e)
@@ -1238,7 +1254,7 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
             IRODSFileFactory ff = factory_.getIRODSFileFactory(acct);
             IRODSRandomAccessFile file = ff.instanceIRODSRandomAccessFile(path.toString(), OpenFlags.READ);
             
-            try (AutoClosedIRODSRandomAccessFile ac = new AutoClosedIRODSRandomAccessFile(file))
+            try (AutoClosedIRODSRandomAccessFile ac = new AutoClosedIRODSRandomAccessFile(file, path.toString()))
             {
                 file.seek(_offset, FileIOOperations.SeekWhenceType.SEEK_START);
                 return file.read(_data, 0, _count);
@@ -1293,9 +1309,11 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
 
             inodeToPathMapper_.unmap(getInodeNumber(objectPath), objectPath);
 
+            // TODO This shouldn't be necessary if the mtime updates are working.
             // Remove any cached stat information as this can lead to unwanted errors
             // when carrying out later requests.
-            statObjectCache_.remove(acct.getUserName() + "_" + objectPath.toString());
+            listOpCache_.remove(acct.getUserName() + "#" + objectPath.getParent().toString());
+            statObjectCache_.remove(acct.getUserName() + "_" + parentPath.toString());
 
             log_.debug("remove - [{}] removed.", objectPath);
         }
@@ -1361,13 +1379,16 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
             // an error if old stat information is used across multiple writes.
             // We remove any cached stat object for the path to avoid this.
             statObjectCache_.remove(acct.getUserName() + "_" + path.toString());
+            listOpCache_.remove(acct.getUserName() + "#" + path.getParent().toString());
 
             IRODSFileFactory ff = factory_.getIRODSFileFactory(acct);
 
+            log_.trace(">>>>>> Opening [{}] ...", path.toString());
             final boolean coordinated = true;
             IRODSRandomAccessFile file = ff.instanceIRODSRandomAccessFile(path.toString(), OpenFlags.READ_WRITE, coordinated);
+            log_.trace(">>>>>> Opened [{}].", path.toString());
 
-            try (AutoClosedIRODSRandomAccessFile ac = new AutoClosedIRODSRandomAccessFile(file))
+            try (AutoClosedIRODSRandomAccessFile ac = new AutoClosedIRODSRandomAccessFile(file, path.toString()))
             {
                 file.seek(_offset, FileIOOperations.SeekWhenceType.SEEK_START);
                 file.write(_data, 0, _count);
@@ -1933,10 +1954,12 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
     private static class AutoClosedIRODSRandomAccessFile implements AutoCloseable
     {
         private final IRODSRandomAccessFile file_;
+        private final String path_;
 
-        AutoClosedIRODSRandomAccessFile(IRODSRandomAccessFile _file)
+        AutoClosedIRODSRandomAccessFile(IRODSRandomAccessFile _file, String _path)
         {
             file_ = _file;
+            path_ = _path;
         }
 
         @Override
@@ -1944,7 +1967,9 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
         {
             try
             {
+            	log_.trace(">>>>>> Closing [{}] ...", path_);
                 file_.close();
+            	log_.trace(">>>>>> Closed [{}].", path_);
             }
             catch (IOException e)
             {

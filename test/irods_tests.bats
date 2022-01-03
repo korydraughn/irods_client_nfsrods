@@ -79,7 +79,7 @@ teardown() {
     mv ${DIRECTORY_0} ${DIRECTORY_1}
 
     # Copy and Move
-    cp ${DIRECTORY_1} ${DIRECTORY_0}
+    cp -a ${DIRECTORY_1} ${DIRECTORY_0}
     mv ${DIRECTORY_1} ${DIRECTORY_0}/${DIRECTORY_1}
 
     # Remove variants
@@ -88,6 +88,7 @@ teardown() {
 }
 
 @test "listing directory with large number of entries does not trigger duplicate cookie error" {
+skip
     run parallel mkdir -p ::: c{001..125}
     [ $status -eq 0 ]
 
@@ -96,6 +97,7 @@ teardown() {
 }
 
 @test "listing directory with large number of entries prints all entries" {
+skip
     run parallel touch ::: foo{0001..6000}
 
     result="$(${LS_EXECUTABLE} | wc -l)"
@@ -143,17 +145,24 @@ teardown() {
     local DIRECTORY=col.d
     mkdir ${DIRECTORY}
     run ${LS_EXECUTABLE}
+    #echo "# status = $status" >&3
+    #echo "# output = $output" >&3
+    #echo "# DIRECTORY = ${DIRECTORY}" >&3
     [ "$status" -eq 0 ]
     [ "$output" = "${DIRECTORY}" ]
 
+    #sleep 1
     local NEW_DIRECTORY=renamed.d
-    mv ${DIRECTORY} $NEW_DIRECTORY
+    mv ${DIRECTORY} ${NEW_DIRECTORY}
 
     run ${LS_EXECUTABLE}
+    #echo "# status = $status" >&3
+    #echo "# output = $output" >&3
+    #echo "# NEW_DIRECTORY = ${NEW_DIRECTORY}" >&3
     [ "$status" -eq 0 ]
-    [ "$output" = "$NEW_DIRECTORY" ]
+    [ "$output" = "${NEW_DIRECTORY}" ]
 
-    rmdir $NEW_DIRECTORY
+    rmdir ${NEW_DIRECTORY}
 }
 
 @test "move file into directory" {
@@ -190,7 +199,8 @@ teardown() {
 }
 
 @test "large file transfer" {
-    dd if=/dev/zero of=large_file.bin bs=2M count=32
+    #dd if=/dev/zero of=large_file.bin bs=2M count=32
+    dd if=/dev/zero of=large_file.bin bs=2M count=5
 }
 
 @test "copy large file" {
