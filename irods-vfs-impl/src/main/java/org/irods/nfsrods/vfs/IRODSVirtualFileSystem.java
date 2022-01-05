@@ -36,6 +36,8 @@ import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
 import javax.cache.Cache;
@@ -1354,6 +1356,8 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
     {
         throw new UnsupportedOperationException("Not supported");
     }
+    
+    private static final Lock writeLock_ = new ReentrantLock();
 
     @Override
     public WriteResult write(Inode _inode, byte[] _data, long _offset, int _count, StabilityLevel _stabilityLevel)
@@ -1388,7 +1392,7 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
             IRODSRandomAccessFile file = ff.instanceIRODSRandomAccessFile(path.toString(), OpenFlags.READ_WRITE, coordinated);
             log_.trace(">>>>>> Opened [{}].", path.toString());
 
-            try (AutoClosedIRODSRandomAccessFile ac = new AutoClosedIRODSRandomAccessFile(file, path.toString()))
+            try (var ac = new AutoClosedIRODSRandomAccessFile(file, path.toString(), writeLock_))
             {
                 file.seek(_offset, FileIOOperations.SeekWhenceType.SEEK_START);
                 file.write(_data, 0, _count);
@@ -1955,16 +1959,28 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
     {
         private final IRODSRandomAccessFile file_;
         private final String path_;
+        private final Lock lock_;
 
-        AutoClosedIRODSRandomAccessFile(IRODSRandomAccessFile _file, String _path)
+        AutoClosedIRODSRandomAccessFile(IRODSRandomAccessFile _file, String _path, Lock _lock)
         {
             file_ = _file;
             path_ = _path;
+            lock_ = _lock;
+        }
+
+        AutoClosedIRODSRandomAccessFile(IRODSRandomAccessFile _file, String _path)
+        {
+            this(_file, _path, null);
         }
 
         @Override
         public void close()
         {
+            if (null != lock_)
+            {
+                lock_.lock();
+            }
+
             try
             {
             	log_.trace(">>>>>> Closing [{}] ...", path_);
@@ -1974,6 +1990,13 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
             catch (IOException e)
             {
                 log_.error(e.getMessage());
+            }
+            finally
+            {
+                if (null != lock_)
+                {
+                    lock_.unlock();
+                }
             }
         }
     }
