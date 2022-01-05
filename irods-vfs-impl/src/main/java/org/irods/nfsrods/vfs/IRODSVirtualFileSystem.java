@@ -1327,6 +1327,7 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
             // when carrying out later requests.
             listOpCache_.remove(acct.getUserName() + "#" + objectPath.getParent().toString());
             statObjectCache_.remove(acct.getUserName() + "_" + parentPath.toString());
+            dataObjectParallelWriteLockMap_.remove(acct.getUserName() + "_" + objectPath.toString());
 
             log_.debug("remove - [{}] removed.", objectPath);
         }
