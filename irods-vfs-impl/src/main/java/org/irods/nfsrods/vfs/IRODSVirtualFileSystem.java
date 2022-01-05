@@ -34,7 +34,9 @@ import java.security.AccessController;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -1358,6 +1360,7 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
     }
     
     private static final Lock writeLock_ = new ReentrantLock();
+    private static final Map<String, Lock> writeLockMap_ = new ConcurrentHashMap<>();
 
     @Override
     public WriteResult write(Inode _inode, byte[] _data, long _offset, int _count, StabilityLevel _stabilityLevel)
@@ -1382,7 +1385,8 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
             // the write operation from multiple threads. This will result in
             // an error if old stat information is used across multiple writes.
             // We remove any cached stat object for the path to avoid this.
-            statObjectCache_.remove(acct.getUserName() + "_" + path.toString());
+            final var key = acct.getUserName() + "_" + path.toString();
+            statObjectCache_.remove(key);
             listOpCache_.remove(acct.getUserName() + "#" + path.getParent().toString());
 
             IRODSFileFactory ff = factory_.getIRODSFileFactory(acct);
@@ -1390,20 +1394,21 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
 
             log_.trace(">>>>>> Opening [{}] ...", path.toString());
 
+            var lock = (Lock) writeLockMap_.computeIfAbsent(key, k -> new ReentrantLock());
             try
             {
-                writeLock_.lock();
+                lock.lock();
                 final boolean coordinated = true;
                 file = ff.instanceIRODSRandomAccessFile(path.toString(), OpenFlags.READ_WRITE, coordinated);
             }
             finally
             {
-                writeLock_.unlock();
+                lock.unlock();
             }
             
             log_.trace(">>>>>> Opened [{}].", path.toString());
 
-            try (var ac = new AutoClosedIRODSRandomAccessFile(file, path.toString(), writeLock_))
+            try (var ac = new AutoClosedIRODSRandomAccessFile(file, path.toString(), lock))
             {
                 file.seek(_offset, FileIOOperations.SeekWhenceType.SEEK_START);
                 file.write(_data, 0, _count);
