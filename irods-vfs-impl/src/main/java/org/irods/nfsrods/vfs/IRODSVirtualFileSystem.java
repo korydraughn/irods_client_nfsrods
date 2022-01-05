@@ -1386,10 +1386,21 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
             listOpCache_.remove(acct.getUserName() + "#" + path.getParent().toString());
 
             IRODSFileFactory ff = factory_.getIRODSFileFactory(acct);
+            IRODSRandomAccessFile file = null;
 
             log_.trace(">>>>>> Opening [{}] ...", path.toString());
-            final boolean coordinated = true;
-            var file = ff.instanceIRODSRandomAccessFile(path.toString(), OpenFlags.READ_WRITE, coordinated);
+
+            try
+            {
+                writeLock_.lock();
+                final boolean coordinated = true;
+                file = ff.instanceIRODSRandomAccessFile(path.toString(), OpenFlags.READ_WRITE, coordinated);
+            }
+            finally
+            {
+                writeLock_.unlock();
+            }
+            
             log_.trace(">>>>>> Opened [{}].", path.toString());
 
             try (var ac = new AutoClosedIRODSRandomAccessFile(file, path.toString(), writeLock_))
