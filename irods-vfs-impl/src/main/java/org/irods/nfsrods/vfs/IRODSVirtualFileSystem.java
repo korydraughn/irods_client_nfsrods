@@ -1389,7 +1389,7 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
 
             log_.trace(">>>>>> Opening [{}] ...", path.toString());
             final boolean coordinated = true;
-            IRODSRandomAccessFile file = ff.instanceIRODSRandomAccessFile(path.toString(), OpenFlags.READ_WRITE, coordinated);
+            var file = ff.instanceIRODSRandomAccessFile(path.toString(), OpenFlags.READ_WRITE, coordinated);
             log_.trace(">>>>>> Opened [{}].", path.toString());
 
             try (var ac = new AutoClosedIRODSRandomAccessFile(file, path.toString(), writeLock_))
@@ -1979,6 +1979,7 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
             if (null != lock_)
             {
                 lock_.lock();
+                log_.trace(">>>>>> close() - lock status = {}", lock_);
             }
 
             try
@@ -1996,6 +1997,7 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
                 if (null != lock_)
                 {
                     lock_.unlock();
+                    log_.trace(">>>>>> close() - lock status = {}", lock_);
                 }
             }
         }
