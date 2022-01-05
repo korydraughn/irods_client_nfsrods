@@ -115,6 +115,15 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
     private final ReadWriteAclWhitelist readWriteAclWhitelist_;
     private final boolean allowOverwriteOfExistingFiles_;
     private final boolean usingOracleDB_;
+    
+    // Maintains a set of locks for parallel writes for each (user, path)
+    // tuple. The locks are used to synchronize calls to open and close across
+    // parallel writes to the same replica. This is unique to NFSRODS because
+    // it cannot know how the client app (e.g. dd) will attempt to write data.
+    // Ultimately, the locks are used to avoid issues around replica access
+    // tokens (e.g. a call to open fails due to not having the required to
+    // replica access token).
+    private static final Map<String, Lock> dataObjectParallelWriteLockMap_ = new ConcurrentHashMap<>();
 
     private final MutableConfiguration<String, Stat> statObjectCacheConfig_; // Key: <username>_<path>
     private final Cache<String, Stat> statObjectCache_;                      // Key: <username>_<path>
@@ -1258,7 +1267,7 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
             IRODSFileFactory ff = factory_.getIRODSFileFactory(acct);
             IRODSRandomAccessFile file = ff.instanceIRODSRandomAccessFile(path.toString(), OpenFlags.READ);
             
-            try (AutoClosedIRODSRandomAccessFile ac = new AutoClosedIRODSRandomAccessFile(file, path.toString()))
+            try (AutoClosedIRODSRandomAccessFile ac = new AutoClosedIRODSRandomAccessFile(file))
             {
                 file.seek(_offset, FileIOOperations.SeekWhenceType.SEEK_START);
                 return file.read(_data, 0, _count);
@@ -1359,9 +1368,6 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
         throw new UnsupportedOperationException("Not supported");
     }
     
-    private static final Lock writeLock_ = new ReentrantLock();
-    private static final Map<String, Lock> writeLockMap_ = new ConcurrentHashMap<>();
-
     @Override
     public WriteResult write(Inode _inode, byte[] _data, long _offset, int _count, StabilityLevel _stabilityLevel)
         throws IOException
@@ -1392,13 +1398,12 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
             IRODSFileFactory ff = factory_.getIRODSFileFactory(acct);
             IRODSRandomAccessFile file = null;
 
-            log_.trace(">>>>>> Opening [{}] ...", path.toString());
+            var lock = (Lock) dataObjectParallelWriteLockMap_.computeIfAbsent(key, k -> new ReentrantLock());
 
-            var lock = (Lock) writeLockMap_.computeIfAbsent(key, k -> new ReentrantLock());
             try
             {
                 lock.lock();
-                final boolean coordinated = true;
+                final var coordinated = true;
                 file = ff.instanceIRODSRandomAccessFile(path.toString(), OpenFlags.READ_WRITE, coordinated);
             }
             finally
@@ -1406,9 +1411,7 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
                 lock.unlock();
             }
             
-            log_.trace(">>>>>> Opened [{}].", path.toString());
-
-            try (var ac = new AutoClosedIRODSRandomAccessFile(file, path.toString(), lock))
+            try (AutoClosedIRODSRandomAccessFile ac = new AutoClosedIRODSRandomAccessFile(file, lock))
             {
                 file.seek(_offset, FileIOOperations.SeekWhenceType.SEEK_START);
                 file.write(_data, 0, _count);
@@ -1974,19 +1977,17 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
     private static class AutoClosedIRODSRandomAccessFile implements AutoCloseable
     {
         private final IRODSRandomAccessFile file_;
-        private final String path_;
         private final Lock lock_;
 
-        AutoClosedIRODSRandomAccessFile(IRODSRandomAccessFile _file, String _path, Lock _lock)
+        AutoClosedIRODSRandomAccessFile(IRODSRandomAccessFile _file, Lock _lock)
         {
             file_ = _file;
-            path_ = _path;
             lock_ = _lock;
         }
 
-        AutoClosedIRODSRandomAccessFile(IRODSRandomAccessFile _file, String _path)
+        AutoClosedIRODSRandomAccessFile(IRODSRandomAccessFile _file)
         {
-            this(_file, _path, null);
+            this(_file, null);
         }
 
         @Override
@@ -1995,14 +1996,11 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
             if (null != lock_)
             {
                 lock_.lock();
-                log_.trace(">>>>>> close() - lock status = {}", lock_);
             }
 
             try
             {
-            	log_.trace(">>>>>> Closing [{}] ...", path_);
                 file_.close();
-            	log_.trace(">>>>>> Closed [{}].", path_);
             }
             catch (IOException e)
             {
@@ -2013,7 +2011,6 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
                 if (null != lock_)
                 {
                     lock_.unlock();
-                    log_.trace(">>>>>> close() - lock status = {}", lock_);
                 }
             }
         }
