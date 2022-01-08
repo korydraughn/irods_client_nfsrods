@@ -115,15 +115,6 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
     private final ReadWriteAclWhitelist readWriteAclWhitelist_;
     private final boolean allowOverwriteOfExistingFiles_;
     private final boolean usingOracleDB_;
-    
-    // Maintains a set of locks for parallel writes for each (user, path)
-    // tuple. The locks are used to synchronize calls to open and close across
-    // parallel writes to the same replica. This is unique to NFSRODS because
-    // it cannot know how the client app (e.g. dd) will attempt to write data.
-    // Ultimately, the locks are used to avoid issues around replica access
-    // tokens (e.g. a call to open fails due to not having the required to
-    // replica access token).
-    private static final Map<String, Lock> dataObjectParallelWriteLockMap_ = new ConcurrentHashMap<>();
 
     private final MutableConfiguration<String, Stat> statObjectCacheConfig_; // Key: <username>_<path>
     private final Cache<String, Stat> statObjectCache_;                      // Key: <username>_<path>
@@ -910,7 +901,7 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
         throws JargonException
     {
         final String cachedObjectKey = _acct.getUserName() + "#" + _path;
-        CachedListingGenQueryResult cachedResult = (CachedListingGenQueryResult ) listOpCache_.get(cachedObjectKey);
+        var cachedResult = (CachedListingGenQueryResult) listOpCache_.get(cachedObjectKey);
 
         CollectionAndDataObjectListAndSearchAO lao = factory_.getCollectionAndDataObjectListAndSearchAO(_acct);
         ObjStat objStat = lao.retrieveObjectStatForPath(_path);
@@ -921,7 +912,15 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
             // since we last saw it.
             if (objStat.getModifiedAt().equals(cachedResult.collectionLastModified))
             {
-            	log_.debug("mtime has not changed for [{}]. Returning cached result.", _path);
+            	log_.debug("listDataObjectsAndCollectionsUnderPathWithPermissions - " +
+            	           "mtime has not changed for [{}]. Returning cached result.", _path);
+
+                // Because iRODS timestamps are stored in seconds, operations that trigger
+                // an mtime update may not be detected by NFSRODS if the operations happen
+                // within the same second.
+                //
+                // To get around this limitation, NFSRODS must manually clear this cache
+                // so that the user sees the updates.
                 return cachedResult.entries;
             }
             
@@ -933,7 +932,7 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
             cachedResult.entries = new ArrayList<>();
         }
 
-        log_.debug("Listing contents of [{}] ...", _path);
+        log_.debug("listDataObjectsAndCollectionsUnderPathWithPermissions - Listing contents of [{}] ...", _path);
 
         cachedResult.collectionLastModified = objStat.getModifiedAt();
 
@@ -1120,6 +1119,12 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
             file.mkdir();
             file.close();
 
+            // Because iRODS timestamps are stored in seconds, operations that trigger
+            // an mtime update may not be detected by NFSRODS if the operations happen
+            // within the same second.
+            //
+            // To get around this limitation, NFSRODS must manually clear this cache
+            // so that the user sees the updates.
             listOpCache_.remove(acct.getUserName() + "#" + parentPath.toString());
 
             long inodeNumber = inodeToPathMapper_.getAndIncrementFileID();
@@ -1207,7 +1212,12 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
 
             inodeToPathMapper_.remap(getInodeNumber(srcPath), srcPath, dstPath);
 
-            // TODO This shouldn't be necessary if the mtime updates are working.
+            // Because iRODS timestamps are stored in seconds, operations that trigger
+            // an mtime update may not be detected by NFSRODS if the operations happen
+            // within the same second.
+            //
+            // To get around this limitation, NFSRODS must manually clear this cache
+            // so that the user sees the updates.
             listOpCache_.remove(acct.getUserName() + "#" + srcParentPath.toString());
 
             if (!srcParentPath.equals(dstParentPath))
@@ -1322,12 +1332,17 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
 
             inodeToPathMapper_.unmap(getInodeNumber(objectPath), objectPath);
 
-            // TODO This shouldn't be necessary if the mtime updates are working.
+            // Because iRODS timestamps are stored in seconds, operations that trigger
+            // an mtime update may not be detected by NFSRODS if the operations happen
+            // within the same second.
+            //
+            // To get around this limitation, NFSRODS must manually clear this cache
+            // so that the user sees the updates.
+            listOpCache_.remove(acct.getUserName() + "#" + objectPath.getParent().toString());
+
             // Remove any cached stat information as this can lead to unwanted errors
             // when carrying out later requests.
-            listOpCache_.remove(acct.getUserName() + "#" + objectPath.getParent().toString());
             statObjectCache_.remove(acct.getUserName() + "_" + parentPath.toString());
-            dataObjectParallelWriteLockMap_.remove(acct.getUserName() + "_" + objectPath.toString());
 
             log_.debug("remove - [{}] removed.", objectPath);
         }
@@ -1392,27 +1407,22 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
             // the write operation from multiple threads. This will result in
             // an error if old stat information is used across multiple writes.
             // We remove any cached stat object for the path to avoid this.
-            final var key = acct.getUserName() + "_" + path.toString();
-            statObjectCache_.remove(key);
+            statObjectCache_.remove(acct.getUserName() + "_" + path.toString());
+
+            // Because iRODS timestamps are stored in seconds, operations that trigger
+            // an mtime update may not be detected by NFSRODS if the operations happen
+            // within the same second.
+            //
+            // To get around this limitation, NFSRODS must manually clear this cache
+            // so that the user sees the updates.
             listOpCache_.remove(acct.getUserName() + "#" + path.getParent().toString());
 
             IRODSFileFactory ff = factory_.getIRODSFileFactory(acct);
-            IRODSRandomAccessFile file = null;
 
-            var lock = (Lock) dataObjectParallelWriteLockMap_.computeIfAbsent(key, k -> new ReentrantLock());
-
-            try
-            {
-                lock.lock();
-                final var coordinated = true;
-                file = ff.instanceIRODSRandomAccessFile(path.toString(), OpenFlags.READ_WRITE, coordinated);
-            }
-            finally
-            {
-                lock.unlock();
-            }
+            final var coordinated = true;
+            IRODSRandomAccessFile file = ff.instanceIRODSRandomAccessFile(path.toString(), OpenFlags.READ_WRITE, coordinated);
             
-            try (AutoClosedIRODSRandomAccessFile ac = new AutoClosedIRODSRandomAccessFile(file, lock))
+            try (AutoClosedIRODSRandomAccessFile ac = new AutoClosedIRODSRandomAccessFile(file))
             {
                 file.seek(_offset, FileIOOperations.SeekWhenceType.SEEK_START);
                 file.write(_data, 0, _count);
@@ -1978,27 +1988,15 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
     private static class AutoClosedIRODSRandomAccessFile implements AutoCloseable
     {
         private final IRODSRandomAccessFile file_;
-        private final Lock lock_;
-
-        AutoClosedIRODSRandomAccessFile(IRODSRandomAccessFile _file, Lock _lock)
-        {
-            file_ = _file;
-            lock_ = _lock;
-        }
 
         AutoClosedIRODSRandomAccessFile(IRODSRandomAccessFile _file)
         {
-            this(_file, null);
+            file_ = _file;
         }
 
         @Override
         public void close()
         {
-            if (null != lock_)
-            {
-                lock_.lock();
-            }
-
             try
             {
                 file_.close();
@@ -2006,13 +2004,6 @@ public class IRODSVirtualFileSystem implements VirtualFileSystem, AclCheckable
             catch (IOException e)
             {
                 log_.error(e.getMessage());
-            }
-            finally
-            {
-                if (null != lock_)
-                {
-                    lock_.unlock();
-                }
             }
         }
     }

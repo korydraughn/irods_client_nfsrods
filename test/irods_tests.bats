@@ -11,8 +11,8 @@
 #   - BATS
 #   - GNU Parallel
 #
-# From within an NFSRODS mount point where you have full permission
-# (e.g. your iRODS home collection or a sub-collection), run the following command:
+# From within an NFSRODS mount point where you have full permission, meaning
+# your iRODS home collection or a sub-collection, run the following command:
 #
 #   $ bats test_nfsrods.bats
 #
@@ -88,7 +88,6 @@ teardown() {
 }
 
 @test "listing directory with large number of entries does not trigger duplicate cookie error" {
-skip
     run parallel mkdir -p ::: c{001..125}
     [ $status -eq 0 ]
 
@@ -97,7 +96,6 @@ skip
 }
 
 @test "listing directory with large number of entries prints all entries" {
-skip
     run parallel touch ::: foo{0001..6000}
 
     result="$(${LS_EXECUTABLE} | wc -l)"
@@ -199,8 +197,7 @@ skip
 }
 
 @test "large file transfer" {
-    #dd if=/dev/zero of=large_file.bin bs=2M count=32
-    dd if=/dev/zero of=large_file.bin bs=2M count=5
+    dd if=/dev/zero of=large_file.bin bs=2M count=32
 }
 
 @test "copy large file" {
