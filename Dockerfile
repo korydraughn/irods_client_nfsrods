@@ -19,6 +19,11 @@ ADD config/log4j.properties /nfsrods_config/log4j.properties
 ADD nfsrods.jar start.sh /
 RUN chmod u+x start.sh
 
+# Create a dedicated user for running NFSRODS.
+ARG nfsrods_user=irods_http_api
+RUN adduser --disabled-password ${nfsrods_user}
+USER ${nfsrods_user}
+
 ENV NFSRODS_CONFIG_HOME=/nfsrods_config
 
 ENTRYPOINT ["./start.sh"]
