@@ -14,7 +14,6 @@
 
 	<packaging>jar</packaging>
 	<name>nfsrods</name>
-	<version>2.1.0</version>
 	<description>iRODS VFS implementation for NFS4J</description>
 
 	<properties>
@@ -112,12 +111,6 @@
 					<artifactId>jackson-annotations</artifactId>
 				</exclusion>
 			</exclusions>
-		</dependency>
-
-		<dependency>
-			<groupId>com.boundary</groupId>
-			<artifactId>high-scale-lib</artifactId>
-			<version>1.0.6</version>
 		</dependency>
 
 		<dependency>

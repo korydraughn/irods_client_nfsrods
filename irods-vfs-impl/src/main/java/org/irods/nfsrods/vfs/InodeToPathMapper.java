@@ -2,13 +2,8 @@ package org.irods.nfsrods.vfs;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.irods.jargon.core.connection.IRODSAccount;
 import org.irods.jargon.core.exception.DataNotFoundException;
@@ -30,15 +25,15 @@ class InodeToPathMapper
 
     private Map<Long, Path> inodeToPath_;
     private Map<Path, Long> pathToInode_;
-    private Set<Long> availableInodeNumbers_;
-    private ReadWriteLock lock_;
+//    private Set<Long> availableInodeNumbers_;
+//    private ReadWriteLock lock_;
 
     public InodeToPathMapper(ServerConfig _config, IRODSAccessObjectFactory _factory) throws JargonException
     {
-        inodeToPath_ = new HashMap<>();
-        pathToInode_ = new HashMap<>();
-        availableInodeNumbers_ = new HashSet<>();
-        lock_ = new ReentrantReadWriteLock();
+        inodeToPath_ = new ConcurrentHashMap<>();
+        pathToInode_ = new ConcurrentHashMap<>();
+//        availableInodeNumbers_ = new HashSet<>();
+//        lock_ = new ReentrantReadWriteLock();
         
         NFSServerConfig nfsSvrConfig = _config.getNfsServerConfig();
         IRODSClientConfig rodsSvrConfig = _config.getIRODSClientConfig();
@@ -92,23 +87,26 @@ class InodeToPathMapper
 
     public Long getInodeNumberByPath(Path _path)
     {
-        final Wrapper<Long> ref = new Wrapper<>();
-        new AtomicRead(() -> ref.value = pathToInode_.get(_path));
-        return ref.value;
+//        final Wrapper<Long> ref = new Wrapper<>();
+//        new AtomicRead(() -> ref.value = pathToInode_.get(_path));
+//        return ref.value;
+        return pathToInode_.get(_path);
     }
 
     public Path getPathByInodeNumber(Long _inodeNumber)
     {
-        final Wrapper<Path> ref = new Wrapper<>();
-        new AtomicRead(() -> ref.value = inodeToPath_.get(_inodeNumber));
-        return ref.value;
+//        final Wrapper<Path> ref = new Wrapper<>();
+//        new AtomicRead(() -> ref.value = inodeToPath_.get(_inodeNumber));
+//        return ref.value;
+        return inodeToPath_.get(_inodeNumber);
     }
 
     public boolean isMapped(Long _inodeNumber)
     {
-        final Wrapper<Boolean> ref = new Wrapper<>(false);
-        new AtomicRead(() -> ref.value = inodeToPath_.containsKey(_inodeNumber));
-        return ref.value;
+//        final Wrapper<Boolean> ref = new Wrapper<>(false);
+//        new AtomicRead(() -> ref.value = inodeToPath_.containsKey(_inodeNumber));
+//        return ref.value;
+        return inodeToPath_.containsKey(_inodeNumber);
     }
 
     public boolean isMapped(String _path)
@@ -118,9 +116,10 @@ class InodeToPathMapper
 
     public boolean isMapped(Path _path)
     {
-        final Wrapper<Boolean> ref = new Wrapper<>(false);
-        new AtomicRead(() -> ref.value = pathToInode_.containsKey(_path));
-        return ref.value;
+//        final Wrapper<Boolean> ref = new Wrapper<>(false);
+//        new AtomicRead(() -> ref.value = pathToInode_.containsKey(_path));
+//        return ref.value;
+        return pathToInode_.containsKey(_path);
     }
 
     public void map(Long _inodeNumber, String _path)
@@ -130,7 +129,7 @@ class InodeToPathMapper
 
     public void map(Long _inodeNumber, Path _path)
     {
-        new AtomicWrite(() -> {
+//        new AtomicWrite(() -> {
             log_.debug("map - mapping inode number to path [{} => {}] ...", _inodeNumber, _path);
 
             Path otherPath = inodeToPath_.putIfAbsent(_inodeNumber, _path);
@@ -153,7 +152,7 @@ class InodeToPathMapper
 
                 throw new IllegalStateException("Path is already mapped to existing inode number");
             }
-        });
+//        });
     }
 
     public void unmap(Long _inodeNumber, Path _path)
@@ -166,7 +165,7 @@ class InodeToPathMapper
     {
         log_.debug("unmap - unmapping inode number and path [{} => {}] ...", _inodeNumber, _path);
 
-        new AtomicWrite(() -> {
+//        new AtomicWrite(() -> {
             Path mappedPath = inodeToPath_.remove(_inodeNumber);
 
             if (!_path.equals(mappedPath))
@@ -183,11 +182,11 @@ class InodeToPathMapper
                                                 "[mapped inode number => " + mappedInodeNumber + "]");
             }
 
-            if (_storeInAvailableInodeNumbersSet)
-            {
-                availableInodeNumbers_.add(_inodeNumber);
-            }
-        });
+//            if (_storeInAvailableInodeNumbersSet)
+//            {
+//                availableInodeNumbers_.add(_inodeNumber);
+//            }
+//        });
     }
 
     public void remap(Long _inodeNumber, Path _oldPath, Path _newPath)
@@ -199,35 +198,35 @@ class InodeToPathMapper
         map(_inodeNumber, _newPath);
     }
     
-    private interface Function
-    {
-        void execute();
-    }
-    
-    private final class AtomicRead
-    {
-        AtomicRead(Function _func)
-        {
-            Lock l = lock_.readLock();
-            l.lock();
-            try { _func.execute(); } finally { l.unlock(); }
-        }
-    }
-
-    private final class AtomicWrite
-    {
-        AtomicWrite(Function _func)
-        {
-            Lock l = lock_.writeLock();
-            l.lock();
-            try { _func.execute(); } finally { l.unlock(); }
-        }
-    }
-    
-    private final class Wrapper<T>
-    {
-        T value;
-        Wrapper() {}
-        Wrapper(T _initialValue) { value = _initialValue; }
-    }
+//    private interface Function
+//    {
+//        void execute();
+//    }
+//    
+//    private final class AtomicRead
+//    {
+//        AtomicRead(Function _func)
+//        {
+//            Lock l = lock_.readLock();
+//            l.lock();
+//            try { _func.execute(); } finally { l.unlock(); }
+//        }
+//    }
+//
+//    private final class AtomicWrite
+//    {
+//        AtomicWrite(Function _func)
+//        {
+//            Lock l = lock_.writeLock();
+//            l.lock();
+//            try { _func.execute(); } finally { l.unlock(); }
+//        }
+//    }
+//    
+//    private final class Wrapper<T>
+//    {
+//        T value;
+//        Wrapper() {}
+//        Wrapper(T _initialValue) { value = _initialValue; }
+//    }
 }
