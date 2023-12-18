@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -14,7 +15,6 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-import org.cliffc.high_scale_lib.NonBlockingHashMap;
 import org.dcache.nfs.v4.NfsIdMapping;
 import org.irods.jargon.core.pub.IRODSAccessObjectFactory;
 import org.irods.nfsrods.config.IRODSProxyAdminAccountConfig;
@@ -82,8 +82,8 @@ public class IRODSIdMapper implements NfsIdMapping
     {
         config_ = _config;
         factory_ = _factory;
-        nameToUidMap_ = new NonBlockingHashMap<>();
-        uidToNameMap_ = new NonBlockingHashMap<>();
+        nameToUidMap_ = new ConcurrentHashMap<>();
+        uidToNameMap_ = new ConcurrentHashMap<>();
         scheduler_ = Executors.newSingleThreadScheduledExecutor();
         purgeUsersLock_ = new ReentrantReadWriteLock();
 
