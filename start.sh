@@ -1,21 +1,29 @@
 #! /bin/bash
 
+tls_init_flag=/irods_tls_certs_initialized.flag
+keystore_options=
+
 if [ "$1" != "sha" ]; then
-    # Handle SSL/TLS cert.
-    if [ -f /nfsrods_ssl.crt ]; then
-       echo "Cert found for NFSRODS"
-       set +e
-       keytool -delete -noprompt -alias nfsrods -cacerts -storepass changeit
-       set -e
-       echo "Importing cert to OpenJDK keystore"
-       keytool -import -trustcacerts -cacerts -storepass changeit -noprompt -alias nfsrods -file /nfsrods_ssl.crt
-       echo "Done"
+    # Handle TLS certificate.
+    if [ ! -f "$tls_init_flag" -a -f /nfsrods_ssl.crt ]; then
+        echo "Cert found for NFSRODS"
+
+        set -e
+        echo "Importing cert to NFSRODS keystore"
+        keytool -import -trustcacerts -keystore "$NFSRODS_KEYSTORE_FILE" -storepass changeit -noprompt -alias nfsrods -file /nfsrods_ssl.crt
+        echo "Done"
+
+        keystore_options="-Djavax.net.ssl.trustStore=${NFSRODS_KEYSTORE_FILE} -Djavax.net.ssl.trustStorePassword=changeit"
+
+        # Creat file to keep the container from processing the
+        # TLS certificates again.
+        touch $tls_init_flag
     else
-       echo "Cert not found for NFSRODS - not importing"
+        echo "Cert not found for NFSRODS - not importing"
     fi
 fi
 
-exec java \
+exec java $keystore_options \
     -Dlog4j2.contextSelector=org.apache.logging.log4j.core.async.AsyncLoggerContextSelector \
     -Dlog4j2.configurationFile=$NFSRODS_CONFIG_HOME/log4j.properties \
     -Dlog4j.shutdownHookEnabled=false \
