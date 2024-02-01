@@ -26,7 +26,7 @@ RUN cp ${JAVA_HOME}/lib/security/cacerts ${NFSRODS_KEYSTORE_FILE}
 
 # Create a dedicated user for running NFSRODS.
 ARG nfsrods_user=nfsrods
-RUN adduser --disabled-password ${nfsrods_user}
+RUN adduser --system --disabled-password ${nfsrods_user}
 USER ${nfsrods_user}
 
 ENV NFSRODS_CONFIG_HOME=/nfsrods_config
