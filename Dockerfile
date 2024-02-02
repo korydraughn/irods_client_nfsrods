@@ -19,11 +19,6 @@ ADD config/log4j.properties /nfsrods_config/log4j.properties
 ADD nfsrods.jar start.sh /
 RUN chmod u+x start.sh
 
-# Create a copy of the cacerts which ship with the JDK.
-# This allows us to launch the NFSRODS server without root.
-ENV NFSRODS_KEYSTORE_FILE "/nfsrods.jks"
-RUN cp ${JAVA_HOME}/lib/security/cacerts ${NFSRODS_KEYSTORE_FILE}
-
 # Create a dedicated user for running NFSRODS.
 ARG nfsrods_user=nfsrods
 RUN adduser --system --disabled-password ${nfsrods_user}

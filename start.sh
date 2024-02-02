@@ -8,12 +8,15 @@ if [ "$1" != "sha" ]; then
     if [ ! -f "$tls_init_flag" -a -f /nfsrods_ssl.crt ]; then
         echo "Cert found for NFSRODS"
 
+        nfsrods_keystore=/nfsrods.jks
+        cp ${JAVA_HOME}/lib/security/cacerts ${nfsrods_keystore}
+
         set -e
         echo "Importing cert to NFSRODS keystore"
-        keytool -import -trustcacerts -keystore "$NFSRODS_KEYSTORE_FILE" -storepass changeit -noprompt -alias nfsrods -file /nfsrods_ssl.crt
+        keytool -import -trustcacerts -keystore "$nfsrods_keystore" -storepass changeit -noprompt -alias nfsrods -file /nfsrods_ssl.crt
         echo "Done"
 
-        keystore_options="-Djavax.net.ssl.trustStore=${NFSRODS_KEYSTORE_FILE} -Djavax.net.ssl.trustStorePassword=changeit"
+        keystore_options="-Djavax.net.ssl.trustStore=${nfsrods_keystore} -Djavax.net.ssl.trustStorePassword=changeit"
 
         # Creat file to keep the container from processing the
         # TLS certificates again.
